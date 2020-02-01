@@ -67,7 +67,7 @@ INTERVAL_OPERATORS = {
 }
 
 # Preference rules format
-RULE_STRING = 'IF A1 {op1} {c1} AND A2 {op2} {c2} THEN A3 = {b} BETTER A3 = {w} {i}'
+RULE_STRING = 'IF A1 = {c1} AND A2 = {c2} THEN A3 = {b} BETTER A3 = {w} {i}'
 # Query
 QUERY = '''SELECT {t} * FROM r
 ACCORDING TO PREFERENCES
@@ -99,8 +99,6 @@ def gen_rule(rule_dict):
     '''
     return RULE_STRING.format(c1=rule_dict['COND1'],
                               c2=rule_dict['COND2'],
-                              op1=rule_dict['OP1'],
-                              op2=rule_dict['OP2'],
                               b=rule_dict['BEST'],
                               w=rule_dict['WORST'],
                               i=rule_dict['INDIFF'])
@@ -114,9 +112,6 @@ def gen_rules(n_rules, level, ind):
     # Values for attributes of rule condition
     cond1 = 1
     cond2 = 1
-    # Possible interval operators 
-    op1 = INTERVAL_OPERATORS[random.choice(list(INTERVAL_OPERATORS.keys()))]
-    op2 = INTERVAL_OPERATORS[random.choice(list(INTERVAL_OPERATORS.keys()))]
     # Preferred value
     pref_value = 1
     # Indifferent attributes
@@ -136,8 +131,6 @@ def gen_rules(n_rules, level, ind):
         rule_dict = {}
         rule_dict['COND1'] = cond1
         rule_dict['COND2'] = cond2
-        rule_dict['OP1'] = op1
-        rule_dict['OP2'] = op2
         rule_dict['BEST'] = pref_value
         pref_value += 1
         rule_dict['WORST'] = pref_value
@@ -146,9 +139,6 @@ def gen_rules(n_rules, level, ind):
         if current_level == level:
             current_level = 0
             pref_value = 1
-            #choose random interval operators for condition
-            op1 = INTERVAL_OPERATORS[random.choice(list(INTERVAL_OPERATORS.keys()))]
-            op2 = INTERVAL_OPERATORS[random.choice(list(INTERVAL_OPERATORS.keys()))]
             cond2 += 1            
         # Check if maximum values have been reached
         if cond2 > MAX_VALUE:

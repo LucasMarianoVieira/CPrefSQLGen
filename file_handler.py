@@ -7,22 +7,11 @@ File and Directory handling
 import csv
 import os
 
-from gen import get_id, get_data_id, get_util_id
-
-
 # =============================================================================
 # Generic directories and files
 # =============================================================================
-MAIN_DIR = 'main'
-DATA_DIR = 'data'
-QUERY_DIR = 'queries'
-OUT_DIR = 'out'
-SUMMARY_DIR = 'summary'
-RESULT_DIR = 'result'
-DIR_LIST = [MAIN_DIR, DATA_DIR, QUERY_DIR, ENV_DIR, OUT_DIR, DETAIL_DIR,
-            SUMMARY_DIR, RESULT_DIR]
 
-def _create_directory(directory):
+def create_directory(directory):
     '''
     Create a directory if it does not exists
     '''
@@ -33,10 +22,10 @@ def write_to_csv(filename, attribute_list, record_list):
     '''
     Store record list into a CSV file
     '''
+    print("writing csv data...")
     # Check if file does not exists
     if not os.path.isfile(filename):
         # Store data to file
-        print("writing csv data...")
         data_file = open(filename, 'w')
         writer = csv.DictWriter(data_file, attribute_list, delimiter=',')
         writer.writeheader()
@@ -57,8 +46,8 @@ def write_to_txt(filename, text):
     Store record list into a CSV file
     '''
     # Check if file does not exists
+    print("writing to text file...")
     if not os.path.isfile(filename):
-        print("writing to text file...")
         #Store data to file
         out_file = open(filename, 'w')
         out_file.write(text)
@@ -78,3 +67,4 @@ def write_result_file(filename, record_list, key_field):
         # Put key field in the beginning of field list
         field_list.insert(0, key_field)
         write_to_csv(filename, field_list, record_list)
+

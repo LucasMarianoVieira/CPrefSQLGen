@@ -7,64 +7,13 @@ Tuple and Preference generation
 import csv
 import os
 import random
-
-# Experiment parameters
-ATT = 'att'
-TUP = 'tup'
-DEL = 'del'
-INS = 'ins'
-RUL = 'rul'
-LEV = 'lev'
-IND = 'ind'
-TOP = 'top'
-ALGORITHM = 'algorithm'
+import file_handler
 
 # Parameter values related to generation of table data
 # Max value for attributes
 MAX_VALUE = 63
 # Min value for attributes
-MAX_VALUE = 0
-# List of attributes number for testing
-ATTRIBUTE_LIST = [8, 16, 32, 64]
-# List of tuples number
-TUPLE_LIST = [500, 1000, 2000, 4000, 8000]
-# Maximum tuple number
-TUPLE_MAX = TUPLE_LIST[-1]
-# Top-k variation (-1 for best operator)
-TOPK_LIST = [-1, 125, 250, 500, 1000]
-
-# Default top-k
-TOPK_DEFAULT = -1
-# Default tuples number
-TUPLE_DEFAULT = 1000
-# Default attributes number
-ATTRIBUTE_DEFAULT = 8
-# Default iteration number
-ITERATION_DEFAULT = 100
-
-# Parameter values related to preference queries
-# List of rules number
-RULE_LIST = [2, 4, 8, 16, 32]
-# Default rules number
-RULE_DEFAULT = 8
-# List of levels
-LEVEL_LIST = [1, 2, 4, 8]
-# Default level
-LEVEL_DEFAULT = 2
-# Indifferent attributes list
-INDIFF_LIST = [0, 1, 2, 4]
-# Default indifferent attributes
-INDIFF_DEFAULT = 4
-
-#Interval operators
-INTERVAL_OPERATORS = {
-    'eq' : '=',
-    'neq' : '<>',
-    'gt' : '>',
-    'lt' : '<',
-    'ge' : '>=',
-    'le' : '<=',
-}
+MIN_VALUE = 0
 
 # Preference rules format
 RULE_STRING = 'IF A1 = {c1} AND A2 = {c2} THEN A3 = {b} BETTER A3 = {w} {i}'
@@ -73,7 +22,7 @@ QUERY = '''SELECT {t} * FROM r
 ACCORDING TO PREFERENCES
 {p};'''
 
-def gen_insert_records(tup_number, att_number):
+def gen_records(tup_number, att_number):
     '''
     Generate records
     '''
@@ -161,23 +110,5 @@ def gen_query(n_rules, level, ind, top):
 
     prefs = '\nAND\n'.join(rules)  
     complete_query = QUERY.format(t = topk,
-                              p = rules)
+                              p = prefs)
     return complete_query
-
-def get_query_id(n_rules,level,ind,top):
-    '''
-    Return a query ID for given parameters
-    '''
-    operation = 'best'
-    if top != -1:
-        operation = TOP + str(top)
-    return RUL + str(n_rules) + \
-        LEV + str(level) + \
-        IND + str(ind) + \
-        operation
-
-def get_experiment_id(exp_conf):
-    '''
-    Return the ID of an experiment
-    '''
-    return get_table_id(exp_conf) + get_query_id(exp_conf)

@@ -12,7 +12,7 @@ CPrefSQLGen:
 Dataset Generator with Simple Preferences for CprefSQL
 '''
 
-MAIN_DIR = 'main'
+MAIN_DIR = 'experiments'
 DETAILS_DIR = MAIN_DIR + os.sep + 'details'
 RUNTIME_SUMMARY_DIR = MAIN_DIR + os.sep + 'runtime_summary'
 MEMORY_SUMMARY_DIR = MAIN_DIR + os.sep + 'memory_summary'
@@ -31,7 +31,7 @@ ATTRIBUTE_DEFAULT = 8
 # List of tuples number 
 TUPLE_LIST = [500, 1000, 2000, 4000, 8000]
 # default tuple number 
-TUPLE_DEFAULT = 500
+TUPLE_DEFAULT = 1000
 
 # Parameter values related to preference queries
 # List of rules number (8)
@@ -50,9 +50,14 @@ INDIFF_LIST = [0, 1, 2, 4]
 INDIFF_DEFAULT = 4
 
 # Top-k variation (-1 for best operator) 
-TOPK_LIST = [-1, 10, 100, 1000, 5000]
+TOPK_LIST = [-1, 10, 100, 500, 1000]
 # Default Top-k number 
 TOPK_DEFAULT = -1
+
+# Bases
+SQLITE = 'sqlite'
+POSTGRESQL = 'postgresql'
+BASE_LIST = [SQLITE, POSTGRESQL]
 
 # Experiment parameters
 ATT = 'att'
@@ -121,11 +126,11 @@ def get_rule_file(rules, level, indifferent, topk):
     filename = RULES_DIR + os.sep + query_id + '.txt'
     return filename 
 
-def get_detail_file(algorithm, experiment_id, count):
+def get_detail_file(algorithm, experiment_id, count, base):
     '''
     Get filename for experiment details
     '''
-    return DETAILS_DIR + os.sep + algorithm + os.sep + experiment_id + '.' + str(count) + '.csv'
+    return DETAILS_DIR + os.sep + base + os.sep + algorithm + os.sep + experiment_id + '.' + str(count) + '.csv'
 
 
 def add_experiment(experiment_list, experiment):
@@ -188,10 +193,12 @@ def initialize_directories():
     for directory in DIR_LIST:
         file_handler.create_directory(directory)
         
-    file_handler.create_directory(DETAILS_DIR+os.sep +TUP_ALG_BNL_STAR_STAR)
-    file_handler.create_directory(DETAILS_DIR+os.sep +TUP_ALG_PARTITION)
-    file_handler.create_directory(DETAILS_DIR+os.sep +TUP_ALG_MAX_PREF)
-
+    for directory in BASE_LIST:
+        file_handler.create_directory(DETAILS_DIR+os.sep+directory)
+        for alg in TUP_ALG_LIST:
+            file_handler.create_directory(DETAILS_DIR+os.sep+directory+os.sep+alg)
+        
+     
 def create_experiments(exp_list):
     # Generate directories
     initialize_directories()
@@ -220,24 +227,31 @@ def create_experiments(exp_list):
         # store in text file
         file_handler.write_to_txt(filename, prefs)
 
-def run(algorithm, experiment_conf, count):
+def run(algorithm, experiment_conf, count, base):
     '''
     Run experiment with parameters
     '''
     
-    RUN_COMMAND = "python cprefsql_sqlite.py -d {d} -i {i} -r {r} -a {a} -t {t}"
+    RUN_COMMAND_SQLITE = "python cprefsql_sqlite.py -d {d} -i {i} -r {r} -a {a} -t {t}"
+    RUN_COMMAND_POSTGRESQL = "python cprefsql_postgre.py -d {d} -i {i} -r {r} -a {a} -t {t}"
     
     experiment_id = get_experiment_id(experiment_conf)
     
-    detail_file = get_detail_file(algorithm, experiment_id, count)
+    detail_file = get_detail_file(algorithm, experiment_id, count, base)
     input_file = get_input_file(experiment_conf[TUP], experiment_conf[ATT])
     rule_file = get_rule_file(experiment_conf[RUL], experiment_conf[LEV], experiment_conf[IND], experiment_conf[TOP])
     topk = experiment_conf[TOP]
     
-    if not os.path.isfile(detail_file):
-        command = RUN_COMMAND.format(d=detail_file, i=input_file, r=rule_file, a=algorithm, t=topk)
-        print("running: ", command)
-        os.system(command)
+    if base == SQLITE:
+        if not os.path.isfile(detail_file):
+            command = RUN_COMMAND_SQLITE.format(d=detail_file, i=input_file, r=rule_file, a=algorithm, t=topk)
+            print("running sql: ", command)
+            #os.system(command)
+    elif base == POSTGRESQL:
+        if not os.path.isfile(detail_file):
+            command = RUN_COMMAND_POSTGRESQL.format(d=detail_file, i=input_file, r=rule_file, a=algorithm, t=topk)
+            print("running postgresql: ", command)
+            #os.system(command)
 
 def run_experiments(experiment_list):
     '''
@@ -245,10 +259,11 @@ def run_experiments(experiment_list):
     '''
     repetition = EXPERIMENT_RERUN + 1
     
-    for alg in TUP_ALG_LIST:
-        for exp_rec in experiment_list:
-            for count in range(repetition):
-                run(alg, exp_rec, count + 1)
+    for base in BASE_LIST:
+        for alg in TUP_ALG_LIST:
+            for exp_rec in experiment_list:
+                for count in range(repetition):
+                    run(alg, exp_rec, count + 1, base)
 
 def summarize_confidence_interval(detail_file_list):
     mem_list = []
@@ -287,112 +302,113 @@ def summarize_all():
     '''
     repetition = EXPERIMENT_RERUN + 1
     
-    for algorithm in TUP_ALG_LIST:
-        print("Experiments with algorithm: ", algorithm)
+    for base in BASE_LIST:
+        for algorithm in TUP_ALG_LIST:
+            print("Experiments with algorithm: ", algorithm)
 
-        # Default parameters
-        def_rec = {ATT: ATTRIBUTE_DEFAULT, TUP: TUPLE_DEFAULT,
-                   RUL: RULE_DEFAULT, LEV: LEVEL_DEFAULT, IND: INDIFF_DEFAULT,
-                   TOP: TOPK_DEFAULT}
-        
-        
-        print("Experiments varying attribute number: ")
-        # Attributes number variation
-        for att_number in ATTRIBUTE_LIST:
-            print("Experiment with ATT = ", att_number)
-            exp_rec = def_rec.copy()
-            exp_rec[ATT] = att_number
-            experiment_id = get_experiment_id(exp_rec)
+            # Default parameters
+            def_rec = {ATT: ATTRIBUTE_DEFAULT, TUP: TUPLE_DEFAULT,
+                       RUL: RULE_DEFAULT, LEV: LEVEL_DEFAULT, IND: INDIFF_DEFAULT,
+                       TOP: TOPK_DEFAULT}
             
-            detail_file_list = []
-            for count in range(repetition):
-                count_file = count+1
-                detail_file = get_detail_file(algorithm, experiment_id, count_file)  
-                detail_file_list.append(detail_file)
-                
-            summarize_confidence_interval(detail_file_list)
-                
-        print("Experiments varying tupple number: ")
-        # Tuples number variation
-        for tup_number in TUPLE_LIST:
-            print("Experiment with TUP = ", tup_number)
-            exp_rec = def_rec.copy()
-            exp_rec[TUP] = tup_number
-            experiment_id = get_experiment_id(exp_rec)
             
-            detail_file_list = []
-            for count in range(repetition):
-                count_file = count+1
-                detail_file = get_detail_file(algorithm, experiment_id, count_file)  
-                detail_file_list.append(detail_file)
+            print("Experiments varying attribute number: ")
+            # Attributes number variation
+            for att_number in ATTRIBUTE_LIST:
+                print("Experiment with ATT = ", att_number)
+                exp_rec = def_rec.copy()
+                exp_rec[ATT] = att_number
+                experiment_id = get_experiment_id(exp_rec)
                 
-            summarize_confidence_interval(detail_file_list)
-        
-        print("Experiments varying rule number: ")
-        # Rules number variation
-        for rules_number in RULE_LIST:
-            print("Experiment with RUL = ", rules_number)
-            exp_rec = def_rec.copy()
-            exp_rec[RUL] = rules_number
-            experiment_id = get_experiment_id(exp_rec)
+                detail_file_list = []
+                for count in range(repetition):
+                    count_file = count+1
+                    detail_file = get_detail_file(algorithm, experiment_id, count_file, base)  
+                    detail_file_list.append(detail_file)
+                    
+                summarize_confidence_interval(detail_file_list)
+                    
+            print("Experiments varying tupple number: ")
+            # Tuples number variation
+            for tup_number in TUPLE_LIST:
+                print("Experiment with TUP = ", tup_number)
+                exp_rec = def_rec.copy()
+                exp_rec[TUP] = tup_number
+                experiment_id = get_experiment_id(exp_rec)
+                
+                detail_file_list = []
+                for count in range(repetition):
+                    count_file = count+1
+                    detail_file = get_detail_file(algorithm, experiment_id, count_file, base)  
+                    detail_file_list.append(detail_file)
+                    
+                summarize_confidence_interval(detail_file_list)
             
-            detail_file_list = []
-            for count in range(repetition):
-                count_file = count+1
-                detail_file = get_detail_file(algorithm, experiment_id, count_file)  
-                detail_file_list.append(detail_file)
+            print("Experiments varying rule number: ")
+            # Rules number variation
+            for rules_number in RULE_LIST:
+                print("Experiment with RUL = ", rules_number)
+                exp_rec = def_rec.copy()
+                exp_rec[RUL] = rules_number
+                experiment_id = get_experiment_id(exp_rec)
                 
-            summarize_confidence_interval(detail_file_list)
-        
-        
-        print("Experiments varying level number: ")
-        # Level number variation
-        for level in LEVEL_LIST:
-            print("Experiment with LEV = ", level)
-            exp_rec = def_rec.copy()
-            exp_rec[LEV] = level
-            experiment_id = get_experiment_id(exp_rec)
+                detail_file_list = []
+                for count in range(repetition):
+                    count_file = count+1
+                    detail_file = get_detail_file(algorithm, experiment_id, count_file, base)  
+                    detail_file_list.append(detail_file)
+                    
+                summarize_confidence_interval(detail_file_list)
             
-            detail_file_list = []
-            for count in range(repetition):
-                count_file = count+1
-                detail_file = get_detail_file(algorithm, experiment_id, count_file)  
-                detail_file_list.append(detail_file)
+            
+            print("Experiments varying level number: ")
+            # Level number variation
+            for level in LEVEL_LIST:
+                print("Experiment with LEV = ", level)
+                exp_rec = def_rec.copy()
+                exp_rec[LEV] = level
+                experiment_id = get_experiment_id(exp_rec)
                 
-            summarize_confidence_interval(detail_file_list)
+                detail_file_list = []
+                for count in range(repetition):
+                    count_file = count+1
+                    detail_file = get_detail_file(algorithm, experiment_id, count_file, base)  
+                    detail_file_list.append(detail_file)
+                    
+                summarize_confidence_interval(detail_file_list)
 
-        
-        print("Experiments varying indifferent number: ")
-        # indifferent attributes variation
-        for indif_number in INDIFF_LIST:
-            print("Experiment with IND = ", indif_number)
-            exp_rec = def_rec.copy()
-            exp_rec[IND] = indif_number
-            experiment_id = get_experiment_id(exp_rec)
             
-            detail_file_list = []
-            for count in range(repetition):
-                count_file = count+1
-                detail_file = get_detail_file(algorithm, experiment_id, count_file)  
-                detail_file_list.append(detail_file)
+            print("Experiments varying indifferent number: ")
+            # indifferent attributes variation
+            for indif_number in INDIFF_LIST:
+                print("Experiment with IND = ", indif_number)
+                exp_rec = def_rec.copy()
+                exp_rec[IND] = indif_number
+                experiment_id = get_experiment_id(exp_rec)
                 
-            summarize_confidence_interval(detail_file_list)
+                detail_file_list = []
+                for count in range(repetition):
+                    count_file = count+1
+                    detail_file = get_detail_file(algorithm, experiment_id, count_file, base)  
+                    detail_file_list.append(detail_file)
+                    
+                summarize_confidence_interval(detail_file_list)
 
-        print("Experiments varying topk number: ")
-        # topk variation
-        for topk_number in TOPK_LIST:
-            print("Experiment with IND = ", indif_number)
-            exp_rec = def_rec.copy()
-            exp_rec[TOP] = topk_number
-            experiment_id = get_experiment_id(exp_rec)
-            
-            detail_file_list = []
-            for count in range(repetition):
-                count_file = count+1
-                detail_file = get_detail_file(algorithm, experiment_id, count_file)  
-                detail_file_list.append(detail_file)
+            print("Experiments varying topk number: ")
+            # topk variation
+            for topk_number in TOPK_LIST:
+                print("Experiment with IND = ", indif_number)
+                exp_rec = def_rec.copy()
+                exp_rec[TOP] = topk_number
+                experiment_id = get_experiment_id(exp_rec)
                 
-            summarize_confidence_interval(detail_file_list)
+                detail_file_list = []
+                for count in range(repetition):
+                    count_file = count+1
+                    detail_file = get_detail_file(algorithm, experiment_id, count_file, base)  
+                    detail_file_list.append(detail_file)
+                    
+                summarize_confidence_interval(detail_file_list)
 
 
 

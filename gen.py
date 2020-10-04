@@ -17,6 +17,7 @@ MIN_VALUE = 0
 
 # Preference rules format
 RULE_STRING = 'IF A1 = {c1} AND A2 = {c2} THEN A3 = {b} BETTER A3 = {w} {i}'
+RULE_REWRITE_STRING = 'IF (0 <= {a1} <= {n}) THEN (0 <= {a2} <= {x}) BETTER ({x} < {a2} <= {n})'
 # Query
 QUERY = '''SELECT {t} * FROM r
 ACCORDING TO PREFERENCES
@@ -98,6 +99,43 @@ def gen_rules(n_rules, level, ind):
         rule_dict['INDIFF'] = indiff_str
         rules_list.append(gen_rule(rule_dict))
     return rules_list 
+
+def gen_rule_rewrite(rule_dict):
+    '''
+    Convert rule dictionary into rule in string format
+    For rule rewriting
+    '''
+    return RULE_REWRITE_STRING.format(a1=rule_dict['A1'],
+                              a2=rule_dict['A2'],
+                              x=rule_dict['X'],
+                              n=rule_dict['N'])
+
+def gen_rules_rewrite(n_rules, n_max):
+    '''
+    Generate preference rules
+    For rule rewriting
+    '''
+    # Interval max value
+    n = n_max
+    # Interval split point
+    x = n // 2.0
+    # Preference level
+    current_level = 1
+    
+    # Build rules list
+    rules_list = []
+    for _ in range(n_rules):
+        rule_dict = {}
+        rule_dict['A1'] = 'A'+str(current_level)
+        rule_dict['A2'] = 'A'+str(current_level+1)
+
+        rule_dict['X'] = x
+        rule_dict['N'] = n
+
+        current_level += 1
+
+        rules_list.append(gen_rule_rewrite(rule_dict))
+    return rules_list
 
 def gen_query(n_rules, level, ind, top):
     '''

@@ -138,6 +138,8 @@ def get_arguments():
                         help='Preference algorithm')
     parser.add_argument('-t', '--topk', default=-1,
                         help='Number of TopK tupples')
+    parser.add_argument('-w', '--write', default=False,
+                        help='Rewrite rules')
     args = parser.parse_args()
     return args
 
@@ -173,7 +175,8 @@ def main():
     print('\n\nPreferences:')
     print(pref_text)
     print("Number of input tupples: ", len(rec_list))
-        
+
+    # Run without rule rewriting
     if topk <0 :
         # Run BEST algorithm
         

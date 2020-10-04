@@ -16,9 +16,9 @@ import psutil
 PATH = os.path.dirname(os.path.realpath(__file__))
 sys.path.append(os.path.realpath(os.path.join(PATH, '..')))
 
-from algorithms.partition import get_best_partition, get_topk_partition
-from algorithms.nested_loops import get_best, get_topk
-from algorithms.maxpref import get_mbest_partition, get_mtopk_partition
+from algorithms.partition import get_best_partition, get_topk_partition, get_best_partition_rewrite, get_topk_partition_rewrite
+from algorithms.nested_loops import get_best, get_topk, get_best_rewrite, get_topk_rewrite
+from algorithms.maxpref import get_mbest_partition, get_mtopk_partition, get_mbest_partition_rewrite, get_mtopk_partition_rewrite
 
 # Algorithms for tuples comparison
 TUP_ALG_PARTITION = 'partition'
@@ -136,6 +136,7 @@ def get_arguments():
                         help='Preference algorithm')
     parser.add_argument('-t', '--topk', default=-1,
                         help='Number of TopK tupples')
+
     args = parser.parse_args()
     return args
 
@@ -152,6 +153,7 @@ def main():
     pref_filename = args.rules
     algorithm = args.algo
     topk = int(args.topk)
+    rewrite = args.write
 
     print("Parameters: ", input_file, " ", details_file, " ", pref_filename, " ", algorithm," ", topk)    
 
@@ -178,6 +180,7 @@ def main():
     CURSOR.execute(query)
     for rec in CURSOR.fetchall():
         rec_list.append(dict(rec))
+    
     
     if topk <0 :
         # Run BEST algorithm

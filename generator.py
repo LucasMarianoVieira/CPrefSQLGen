@@ -3,7 +3,6 @@
 
 import os
 import gen
-import experiment
 import file_handler
 import csv
 
@@ -67,6 +66,9 @@ LEV = 'lev'
 IND = 'ind'
 TOP = 'top'
 ALG = 'alg'
+REW = 'rewrite'
+
+REW_DEFAULT = False
 
 # Algorithms for tuples comparison
 TUP_ALG_PARTITION = 'partition'
@@ -84,18 +86,18 @@ MEMORY = "memory"
 
 
 
-def get_query_id(n_rules,level,ind,top):
+def get_query_id(n_rules, level, ind, top):
     '''
     Return a query ID for given parameters
     '''
     operation = 'best'
     if top != -1:
         operation = TOP + str(top)
-
+    
     return RUL + str(n_rules) + \
-        LEV + str(level) + \
-        IND + str(ind) + \
-        operation
+            LEV + str(level) + \
+            IND + str(ind) + \
+            operation
 
 def get_experiment_id(exp_conf):
     '''
@@ -184,6 +186,9 @@ def gen_experiment_list():
         rec = def_rec.copy()
         rec[TOP] = topk_number
         add_experiment(exp_list, rec)
+
+    # need more attributes for these tests
+    number_att = 64
     
     return exp_list
 
@@ -197,7 +202,6 @@ def initialize_directories():
         file_handler.create_directory(DETAILS_DIR+os.sep+directory)
         for alg in TUP_ALG_LIST:
             file_handler.create_directory(DETAILS_DIR+os.sep+directory+os.sep+alg)
-        
      
 def create_experiments(exp_list):
     # Generate directories
@@ -231,7 +235,7 @@ def run(algorithm, experiment_conf, count, base):
     '''
     Run experiment with parameters
     '''
-    
+    # Flagged for debug
     RUN_COMMAND_SQLITE = "python cprefsql_sqlite.py -d {d} -i {i} -r {r} -a {a} -t {t}"
     RUN_COMMAND_POSTGRESQL = "python cprefsql_postgre.py -d {d} -i {i} -r {r} -a {a} -t {t}"
     
@@ -265,6 +269,34 @@ def run_experiments(experiment_list):
                 for count in range(repetition):
                     run(alg, exp_rec, count + 1, base)
 
+def calculate_confidence_interval(confidence, values):
+    '''
+    Calculate statistics
+    '''
+    from scipy.stats import norm
+
+    fsum = sum(values)
+    fcount = len(values)
+    # Calculate mean
+    fmean = fsum / fcount
+
+    # Calculate variance
+    fvariance = 0
+    for value in values:
+        fvariance += (value - fmean) ** 2
+    fvariance = fvariance / (fcount - 1)
+
+    # Calculate standard deviation
+    fstd_deviantion = fvariance ** 0.5
+
+    # Calculate critical z
+    critical_z = 1 - ((1 - confidence) / 2)
+    critical_z = norm.ppf(critical_z)
+    # Calculate confidence interval
+    fconf_interval = critical_z * fstd_deviantion / fcount ** 0.5
+
+    return fconf_interval, fmean
+
 def summarize_confidence_interval(detail_file_list):
     mem_list = []
     time_list = []
@@ -282,20 +314,15 @@ def summarize_confidence_interval(detail_file_list):
         for rec in reader:
             time_list.append(float(rec[RUNTIME]))
             mem_list.append(float(rec[MEMORY]))
-            
-    avg_time = round(sum(time_list)/len(time_list),3)
-    avg_mem = round(sum(mem_list)/len(mem_list),3)
     
-    min_time = min(time_list)
-    min_memory = min(mem_list)
+    mem_conf, mem_mean = calculate_confidence_interval(CONFIDENCE_INTERVAL, mem_list)
+    time_conf, time_mean = calculate_confidence_interval(CONFIDENCE_INTERVAL, time_list)
+
+    print("Memory: ", round(mem_mean,3)," MB ± ", round(mem_conf,3))
+    print("Runtime: ", round(time_mean,3)," sec ± ", round(time_conf,3))
     
-    max_time = max(time_list)
-    max_memory = max(mem_list)
+    return round(mem_mean,3), round(mem_conf,3), round(time_mean,3), round(time_conf,3)
     
-    print("Memory: ",avg_mem," MB (-",round(avg_mem-min_memory,3)," , +",round(max_memory-avg_mem,3)," )")
-    print("Runtime: ",avg_time," sec (-",round(avg_time-min_time,3)," , +",round(max_time-avg_time,3)," )")
-    
-             
 def summarize_all():
     '''
     Summarize data from all experiments
@@ -303,19 +330,31 @@ def summarize_all():
     repetition = EXPERIMENT_RERUN + 1
     
     for base in BASE_LIST:
-        for algorithm in TUP_ALG_LIST:
-            print("Experiments with algorithm: ", algorithm)
+        print("Experiments on ", base,"\n")
 
-            # Default parameters
-            def_rec = {ATT: ATTRIBUTE_DEFAULT, TUP: TUPLE_DEFAULT,
-                       RUL: RULE_DEFAULT, LEV: LEVEL_DEFAULT, IND: INDIFF_DEFAULT,
-                       TOP: TOPK_DEFAULT}
-            
-            
-            print("Experiments varying attribute number: ")
-            # Attributes number variation
-            for att_number in ATTRIBUTE_LIST:
-                print("Experiment with ATT = ", att_number)
+        # Default parameters
+        def_rec = {ATT: ATTRIBUTE_DEFAULT, TUP: TUPLE_DEFAULT,
+                   RUL: RULE_DEFAULT, LEV: LEVEL_DEFAULT, IND: INDIFF_DEFAULT,
+                   TOP: TOPK_DEFAULT}
+
+        print("Experiments varying attribute number: ")
+        filename = RUNTIME_SUMMARY_DIR + os.sep + base +"_"+ATT +".csv"
+        atributes = [ATT]
+        for algorithm in TUP_ALG_LIST:
+            atributes.append(algorithm+"memmean")
+            atributes.append(algorithm+"memconf")
+            atributes.append(algorithm+"timemean")
+            atributes.append(algorithm+"timeconf")
+        file_handler.write_to_csv(filename, atributes, [])
+        
+        # Attributes number variation
+        for att_number in ATTRIBUTE_LIST:
+            print("Experiment with ATT = ", att_number)
+            algo_results=[]   
+            algo_results.append(att_number)
+            for algorithm in TUP_ALG_LIST:
+                print("Experiments with algorithm: ", algorithm, "\n")
+                
                 exp_rec = def_rec.copy()
                 exp_rec[ATT] = att_number
                 experiment_id = get_experiment_id(exp_rec)
@@ -326,12 +365,37 @@ def summarize_all():
                     detail_file = get_detail_file(algorithm, experiment_id, count_file, base)  
                     detail_file_list.append(detail_file)
                     
-                summarize_confidence_interval(detail_file_list)
-                    
-            print("Experiments varying tupple number: ")
-            # Tuples number variation
-            for tup_number in TUPLE_LIST:
-                print("Experiment with TUP = ", tup_number)
+                mem_mean, mem_conf, time_mean, time_conf = summarize_confidence_interval(detail_file_list)
+                
+                algo_results.append(mem_mean)
+                algo_results.append(mem_conf)
+                algo_results.append(time_mean)
+                algo_results.append(time_conf)
+           
+            partial_results={}
+            
+            for i, result in enumerate(algo_results):
+                partial_results[atributes[i]]=algo_results[i]
+            file_handler.append_to_csv(filename, atributes, [partial_results])
+            
+        print("\nExperiments varying tupple number: ")
+        filename = RUNTIME_SUMMARY_DIR + os.sep + base +"_"+TUP +".csv"
+        atributes = [TUP]
+        for algorithm in TUP_ALG_LIST:
+            atributes.append(algorithm+"memmean")
+            atributes.append(algorithm+"memconf")
+            atributes.append(algorithm+"timemean")
+            atributes.append(algorithm+"timeconf")
+        file_handler.write_to_csv(filename, atributes, [])
+        
+        # Tupple number variation
+        for tup_number in TUPLE_LIST:
+            print("Experiment with TUP = ", tup_number)
+            algo_results=[]   
+            algo_results.append(tup_number)
+            for algorithm in TUP_ALG_LIST:
+                print("Experiments with algorithm: ", algorithm, "\n")
+                
                 exp_rec = def_rec.copy()
                 exp_rec[TUP] = tup_number
                 experiment_id = get_experiment_id(exp_rec)
@@ -342,12 +406,37 @@ def summarize_all():
                     detail_file = get_detail_file(algorithm, experiment_id, count_file, base)  
                     detail_file_list.append(detail_file)
                     
-                summarize_confidence_interval(detail_file_list)
+                mem_mean, mem_conf, time_mean, time_conf = summarize_confidence_interval(detail_file_list)
+                
+                algo_results.append(mem_mean)
+                algo_results.append(mem_conf)
+                algo_results.append(time_mean)
+                algo_results.append(time_conf)
+           
+            partial_results={}
             
-            print("Experiments varying rule number: ")
-            # Rules number variation
-            for rules_number in RULE_LIST:
-                print("Experiment with RUL = ", rules_number)
+            for i, result in enumerate(algo_results):
+                partial_results[atributes[i]]=algo_results[i]
+            file_handler.append_to_csv(filename, atributes, [partial_results])
+      
+        print("\nExperiments varying rule number: ")
+        filename = RUNTIME_SUMMARY_DIR + os.sep + base +"_"+RUL +".csv"
+        atributes = [RUL]
+        for algorithm in TUP_ALG_LIST:
+            atributes.append(algorithm+"memmean")
+            atributes.append(algorithm+"memconf")
+            atributes.append(algorithm+"timemean")
+            atributes.append(algorithm+"timeconf")
+        file_handler.write_to_csv(filename, atributes, [])
+        
+        # Rule number variation
+        for rules_number in RULE_LIST:
+            print("Experiment with RUL = ", rules_number)
+            algo_results=[]   
+            algo_results.append(rules_number)
+            for algorithm in TUP_ALG_LIST:
+                print("Experiments with algorithm: ", algorithm, "\n")
+                
                 exp_rec = def_rec.copy()
                 exp_rec[RUL] = rules_number
                 experiment_id = get_experiment_id(exp_rec)
@@ -358,13 +447,37 @@ def summarize_all():
                     detail_file = get_detail_file(algorithm, experiment_id, count_file, base)  
                     detail_file_list.append(detail_file)
                     
-                summarize_confidence_interval(detail_file_list)
+                mem_mean, mem_conf, time_mean, time_conf = summarize_confidence_interval(detail_file_list)
+                
+                algo_results.append(mem_mean)
+                algo_results.append(mem_conf)
+                algo_results.append(time_mean)
+                algo_results.append(time_conf)
+           
+            partial_results={}
             
-            
-            print("Experiments varying level number: ")
-            # Level number variation
-            for level in LEVEL_LIST:
-                print("Experiment with LEV = ", level)
+            for i, result in enumerate(algo_results):
+                partial_results[atributes[i]]=algo_results[i]
+            file_handler.append_to_csv(filename, atributes, [partial_results])
+        
+        print("\nExperiments varying level number: ")
+        filename = RUNTIME_SUMMARY_DIR + os.sep + base +"_"+LEV +".csv"
+        atributes = [LEV]
+        for algorithm in TUP_ALG_LIST:
+            atributes.append(algorithm+"memmean")
+            atributes.append(algorithm+"memconf")
+            atributes.append(algorithm+"timemean")
+            atributes.append(algorithm+"timeconf")
+        file_handler.write_to_csv(filename, atributes, [])
+        
+        # Rule number variation
+        for level in LEVEL_LIST:
+            print("Experiment with LEV = ", level)
+            algo_results=[]   
+            algo_results.append(level)
+            for algorithm in TUP_ALG_LIST:
+                print("Experiments with algorithm: ", algorithm, "\n")
+                
                 exp_rec = def_rec.copy()
                 exp_rec[LEV] = level
                 experiment_id = get_experiment_id(exp_rec)
@@ -375,13 +488,37 @@ def summarize_all():
                     detail_file = get_detail_file(algorithm, experiment_id, count_file, base)  
                     detail_file_list.append(detail_file)
                     
-                summarize_confidence_interval(detail_file_list)
-
+                mem_mean, mem_conf, time_mean, time_conf = summarize_confidence_interval(detail_file_list)
+                
+                algo_results.append(mem_mean)
+                algo_results.append(mem_conf)
+                algo_results.append(time_mean)
+                algo_results.append(time_conf)
+           
+            partial_results={}
             
-            print("Experiments varying indifferent number: ")
-            # indifferent attributes variation
-            for indif_number in INDIFF_LIST:
-                print("Experiment with IND = ", indif_number)
+            for i, result in enumerate(algo_results):
+                partial_results[atributes[i]]=algo_results[i]
+            file_handler.append_to_csv(filename, atributes, [partial_results])        
+        
+        print("\nExperiments varying indifferent number: ")
+        filename = RUNTIME_SUMMARY_DIR + os.sep + base +"_"+IND +".csv"
+        atributes = [IND]
+        for algorithm in TUP_ALG_LIST:
+            atributes.append(algorithm+"memmean")
+            atributes.append(algorithm+"memconf")
+            atributes.append(algorithm+"timemean")
+            atributes.append(algorithm+"timeconf")
+        file_handler.write_to_csv(filename, atributes, [])
+        
+        # Rule number variation
+        for indif_number in INDIFF_LIST:
+            print("Experiment with IND = ", indif_number)
+            algo_results=[]   
+            algo_results.append(indif_number)
+            for algorithm in TUP_ALG_LIST:
+                print("Experiments with algorithm: ", algorithm, "\n")
+                
                 exp_rec = def_rec.copy()
                 exp_rec[IND] = indif_number
                 experiment_id = get_experiment_id(exp_rec)
@@ -392,12 +529,37 @@ def summarize_all():
                     detail_file = get_detail_file(algorithm, experiment_id, count_file, base)  
                     detail_file_list.append(detail_file)
                     
-                summarize_confidence_interval(detail_file_list)
-
-            print("Experiments varying topk number: ")
-            # topk variation
-            for topk_number in TOPK_LIST:
-                print("Experiment with IND = ", indif_number)
+                mem_mean, mem_conf, time_mean, time_conf = summarize_confidence_interval(detail_file_list)
+                
+                algo_results.append(mem_mean)
+                algo_results.append(mem_conf)
+                algo_results.append(time_mean)
+                algo_results.append(time_conf)
+           
+            partial_results={}
+            
+            for i, result in enumerate(algo_results):
+                partial_results[atributes[i]]=algo_results[i]
+            file_handler.append_to_csv(filename, atributes, [partial_results])        
+        
+        print("\nExperiments varying topk number: ")
+        filename = RUNTIME_SUMMARY_DIR + os.sep + base +"_"+TOP +".csv"
+        atributes = [TOP]
+        for algorithm in TUP_ALG_LIST:
+            atributes.append(algorithm+"memmean")
+            atributes.append(algorithm+"memconf")
+            atributes.append(algorithm+"timemean")
+            atributes.append(algorithm+"timeconf")
+        file_handler.write_to_csv(filename, atributes, [])
+        
+        # Rule number variation
+        for topk_number in TOPK_LIST:
+            print("Experiment with TOP = ", topk_number)
+            algo_results=[]   
+            algo_results.append(topk_number)
+            for algorithm in TUP_ALG_LIST:
+                print("Experiments with algorithm: ", algorithm, "\n")
+                
                 exp_rec = def_rec.copy()
                 exp_rec[TOP] = topk_number
                 experiment_id = get_experiment_id(exp_rec)
@@ -408,9 +570,18 @@ def summarize_all():
                     detail_file = get_detail_file(algorithm, experiment_id, count_file, base)  
                     detail_file_list.append(detail_file)
                     
-                summarize_confidence_interval(detail_file_list)
-
-
+                mem_mean, mem_conf, time_mean, time_conf = summarize_confidence_interval(detail_file_list)
+                
+                algo_results.append(mem_mean)
+                algo_results.append(mem_conf)
+                algo_results.append(time_mean)
+                algo_results.append(time_conf)
+           
+            partial_results={}
+            
+            for i, result in enumerate(algo_results):
+                partial_results[atributes[i]]=algo_results[i]
+            file_handler.append_to_csv(filename, atributes, [partial_results])       
 
 def get_arguments(print_help=False):
     '''
@@ -446,6 +617,7 @@ def main():
         print('Generating data')
         print('Generating queries')
         create_experiments(exp_list)
+        
     elif args.run:
         print('Running experiments')
         run_experiments(exp_list)
